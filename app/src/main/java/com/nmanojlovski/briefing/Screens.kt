@@ -49,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -92,41 +93,42 @@ fun HomeScreen(
     onShowAll: () -> Unit
 ) {
     val context = LocalContext.current
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
-    ) {
-        HomeHeader(offline = (state as? IndexState.Loaded)?.offline == true) {
-            TodayCard(state, onRetry, onOpen)
-        }
-        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            Text(
-                "Menu",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)
-            )
-            MenuTile(
-                icon = Icons.AutoMirrored.Filled.List,
-                title = "Briefings",
-                subtitle = when (state) {
-                    is IndexState.Loaded ->
-                        "${countText(state.entries.size)} · updated ${state.updatedAt.format(UPDATED_FORMAT)}"
-                    IndexState.Loading -> "Loading…"
-                    is IndexState.Error -> "Browse all briefings"
-                },
-                onClick = onShowAll
-            )
-            Spacer(Modifier.height(12.dp))
-            MenuTile(
-                icon = Icons.Default.Notifications,
-                title = "Notifications",
-                subtitle = "Checks 9:00–13:00 · tap to send a test",
-                onClick = { sendTestNotification(context, (state as? IndexState.Loaded)?.entries?.firstOrNull()) }
-            )
-            Spacer(Modifier.height(24.dp))
+    // Surface paints the background and sets the matching text colour (light text in dark mode).
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+        ) {
+            HomeHeader(offline = (state as? IndexState.Loaded)?.offline == true) {
+                TodayCard(state, onRetry, onOpen)
+            }
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    "Menu",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)
+                )
+                MenuTile(
+                    icon = Icons.AutoMirrored.Filled.List,
+                    title = "Briefings",
+                    subtitle = when (state) {
+                        is IndexState.Loaded ->
+                            "${countText(state.entries.size)} · updated ${state.updatedAt.format(UPDATED_FORMAT)}"
+                        IndexState.Loading -> "Loading…"
+                        is IndexState.Error -> "Browse all briefings"
+                    },
+                    onClick = onShowAll
+                )
+                Spacer(Modifier.height(12.dp))
+                MenuTile(
+                    icon = Icons.Default.Notifications,
+                    title = "Notifications",
+                    subtitle = "Checks 9:00–13:00 · tap to send a test",
+                    onClick = { sendTestNotification(context, (state as? IndexState.Loaded)?.entries?.firstOrNull()) }
+                )
+                Spacer(Modifier.height(24.dp))
+            }
         }
     }
 }
