@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Used instead of values/themes.xml when the phone is in dark mode.
+         A dark window theme also makes the WebView ask pages for their dark colours
+         (CSS prefers-color-scheme: dark), so the briefing turns dark too. -->
+    <style name="Theme.Briefing" parent="android:Theme.Material.NoActionBar" />
+</resources>

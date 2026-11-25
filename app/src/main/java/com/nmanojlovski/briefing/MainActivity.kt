@@ -70,13 +70,15 @@ fun BriefingApp(viewModel: BriefingViewModel) {
         composable<HistoryRoute> {
             HistoryScreen(
                 state = viewModel.state,
-                onRetry = viewModel::refresh,
-                onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) }
+                isRefreshing = viewModel.isRefreshing,
+                onRefresh = viewModel::refresh,
+                onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) },
+                onBack = { navController.navigateUp() }
             )
         }
         composable<ReaderRoute> { backStackEntry ->
             val route: ReaderRoute = backStackEntry.toRoute()
-            ReaderScreen(title = route.title, url = route.url)
+            ReaderScreen(title = route.title, url = route.url, onBack = { navController.navigateUp() })
         }
     }
 }
