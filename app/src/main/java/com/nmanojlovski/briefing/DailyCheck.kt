@@ -19,7 +19,8 @@ import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
 private const val WORK_NAME = "briefing-check"
-private const val CHANNEL_ID = "daily-briefing"
+private const val CHANNEL_ID = "briefing-ready"      // the notification channel (see showBriefingNotification)
+private const val OLD_CHANNEL_ID = "daily-briefing"  // the first version's channel, which couldn't pop up
 private const val FIRST_HOUR = 9  // first check at 9:00
 private const val LAST_HOUR = 13  // last check at 13:00
 
@@ -73,8 +74,11 @@ fun nextCheckTime(now: LocalDateTime, foundToday: Boolean): LocalDateTime {
 fun showBriefingNotification(context: Context, entry: BriefingEntry) {
     val manager = context.getSystemService(NotificationManager::class.java)
     // Every notification belongs to a "channel"; you can switch channels off in the app's settings.
+    // IMPORTANCE_HIGH makes it pop up at the top of the screen. An app can't raise a channel's
+    // importance later, so this is a new channel, and the old, quieter one is deleted.
+    manager.deleteNotificationChannel(OLD_CHANNEL_ID)
     manager.createNotificationChannel(
-        NotificationChannel(CHANNEL_ID, "Daily briefing", NotificationManager.IMPORTANCE_DEFAULT)
+        NotificationChannel(CHANNEL_ID, "Daily briefing", NotificationManager.IMPORTANCE_HIGH)
     )
 
     // Tapping restarts the app and opens this briefing (on top of the main menu).

@@ -1,7 +1,10 @@
 package com.nmanojlovski.briefing
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -87,6 +91,7 @@ fun HomeScreen(
     onOpen: (BriefingEntry) -> Unit,
     onShowAll: () -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -113,6 +118,13 @@ fun HomeScreen(
                     is IndexState.Error -> "Browse all briefings"
                 },
                 onClick = onShowAll
+            )
+            Spacer(Modifier.height(12.dp))
+            MenuTile(
+                icon = Icons.Default.Notifications,
+                title = "Notifications",
+                subtitle = "Checks 9:00–13:00 · tap to send a test",
+                onClick = { sendTestNotification(context, (state as? IndexState.Loaded)?.entries?.firstOrNull()) }
             )
             Spacer(Modifier.height(24.dp))
         }
@@ -544,6 +556,27 @@ private fun shareBriefing(context: Context, title: String, url: String) {
         .putExtra(Intent.EXTRA_SUBJECT, title)
         .putExtra(Intent.EXTRA_TEXT, "$title\n$url")
     context.startActivity(Intent.createChooser(send, null))
+}
+
+// The "Notifications" menu button: shows the real notification right now, for the newest
+// briefing, so you can see what it looks like. If notifications are switched off for this app,
+// it opens the settings page where you can turn them on.
+private fun sendTestNotification(context: Context, latest: BriefingEntry?) {
+    val notificationsOn = context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+    when {
+        latest == null ->
+            Toast.makeText(context, "No briefing loaded yet. Try again in a moment.", Toast.LENGTH_SHORT).show()
+
+        !notificationsOn -> {
+            Toast.makeText(context, "Notifications are off for Briefing. Turn them on here.", Toast.LENGTH_LONG).show()
+            context.startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            )
+        }
+
+        else -> showBriefingNotification(context, latest)
+    }
 }
 
 // ----- Dates (shown in English, like the rest of the app) -----
