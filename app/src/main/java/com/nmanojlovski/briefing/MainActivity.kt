@@ -1,9 +1,13 @@
 package com.nmanojlovski.briefing
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
@@ -22,9 +26,20 @@ class MainActivity : ComponentActivity() {
     // `by viewModels()` creates the ViewModel once and gives back the same one after a rotation.
     private val viewModel: BriefingViewModel by viewModels()
 
+    // Shows Android's "Allow notifications?" dialog. We don't need to react to the answer.
+    private val askNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Since Android 13 an app must ask before it may show notifications.
+        if (savedInstanceState == null &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            askNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             BriefingTheme {
                 BriefingApp(viewModel)
@@ -37,6 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         viewModel.refresh()
+        scheduleDailyCheck(this)
     }
 }
 
