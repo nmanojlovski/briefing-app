@@ -1,82 +1,66 @@
 package com.nmanojlovski.briefing
 
-import android.graphics.Bitmap
 import android.os.Bundle
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Scaffold
+import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.nmanojlovski.briefing.ui.theme.BriefingTheme
+import kotlinx.serialization.Serializable
 
-// Hardcoded for now; step 3 replaces this with the newest entry from index.json.
-const val BRIEFING_URL =
-    "https://nmanojlovski.github.io/daily-briefing/briefings/2026-11-25.html"
+// The app's screens ("routes"). A route is like an address that Navigation can go to and come back from.
+@Serializable data object LatestRoute
+@Serializable data object HistoryRoute
+@Serializable data class ReaderRoute(val title: String, val url: String)
 
 class MainActivity : ComponentActivity() {
+    // `by viewModels()` creates the ViewModel once and gives back the same one after a rotation.
+    private val viewModel: BriefingViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             BriefingTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    BriefingWebView(
-                        url = BRIEFING_URL,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                BriefingApp(viewModel)
             }
         }
+    }
+
+    // Runs every time the app comes to the foreground, so the new morning's briefing
+    // shows up even if the app was left open in the background yesterday.
+    override fun onStart() {
+        super.onStart()
+        viewModel.refresh()
     }
 }
 
 @Composable
-fun BriefingWebView(url: String, modifier: Modifier = Modifier) {
-    var isLoading by remember { mutableStateOf(true) }
-    var canGoBack by remember { mutableStateOf(false) }
-    var webView by remember { mutableStateOf<WebView?>(null) }
-
-    // While there is a previous page, Back goes there instead of closing the app.
-    BackHandler(enabled = canGoBack) {
-        webView?.goBack()
-    }
-
-    Box(modifier = modifier.fillMaxSize()) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                WebView(context).apply {
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
-                            isLoading = true
-                        }
-
-                        override fun onPageFinished(view: WebView?, pageUrl: String?) {
-                            isLoading = false
-                            canGoBack = view?.canGoBack() == true
-                        }
-                    }
-                    loadUrl(url)
-                    webView = this
-                }
-            }
-        )
-        if (isLoading) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+fun BriefingApp(viewModel: BriefingViewModel) {
+    val navController = rememberNavController()
+    NavHost(navController = navController, startDestination = LatestRoute) {
+        composable<LatestRoute> {
+            LatestScreen(
+                state = viewModel.state,
+                onRetry = viewModel::refresh,
+                onShowAll = { navController.navigate(HistoryRoute) }
+            )
+        }
+        composable<HistoryRoute> {
+            HistoryScreen(
+                state = viewModel.state,
+                onRetry = viewModel::refresh,
+                onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) }
+            )
+        }
+        composable<ReaderRoute> { backStackEntry ->
+            val route: ReaderRoute = backStackEntry.toRoute()
+            ReaderScreen(title = route.title, url = route.url)
         }
     }
 }
