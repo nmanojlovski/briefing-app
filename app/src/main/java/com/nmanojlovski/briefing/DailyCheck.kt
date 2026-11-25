@@ -6,22 +6,25 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
-private const val WORK_NAME = "daily-briefing-check"
+private const val WORK_NAME = "briefing-check"
 private const val CHANNEL_ID = "daily-briefing"
+private const val FIRST_HOUR = 9  // first check at 9:00
+private const val LAST_HOUR = 13  // last check at 13:00
 
-// WorkManager runs this in the background around 9:15, even when the app is closed.
+// WorkManager runs this in the background, even when the app is closed.
+// Each run checks once, then books the next run itself.
 class BriefingCheckWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val today = LocalDate.now().toString() // e.g. "2026-11-26", the same format as index.json
@@ -30,32 +33,41 @@ class BriefingCheckWorker(context: Context, params: WorkerParameters) : Coroutin
         } catch (e: Exception) {
             null // no internet or a server problem: treat it like "not published yet"
         }
-        if (todays != null) {
-            showBriefingNotification(applicationContext, todays)
-            return Result.success()
-        }
-        // Not there yet: WorkManager tries again after 15, 30, 45 and 60 minutes, then gives up for today.
-        return if (runAttemptCount < 4) Result.retry() else Result.success()
+        if (todays != null) showBriefingNotification(applicationContext, todays)
+
+        // APPEND_OR_REPLACE: queue the next check to start after this one finishes.
+        scheduleCheck(applicationContext, foundToday = todays != null, ExistingWorkPolicy.APPEND_OR_REPLACE)
+        return Result.success()
     }
 }
 
-// Schedules the check for the next 9:15, then every day after that.
-// Called each time the app opens: WorkManager counts each new day from when the last run
-// finished, so without this the time would slowly drift later.
+// Called every time the app opens. KEEP: if a check is already booked, leave it alone;
+// if none is (first install, or something went wrong), book one.
 fun scheduleDailyCheck(context: Context) {
+    scheduleCheck(context, foundToday = false, ExistingWorkPolicy.KEEP)
+}
+
+private fun scheduleCheck(context: Context, foundToday: Boolean, policy: ExistingWorkPolicy) {
     val now = LocalDateTime.now()
-    var next = now.toLocalDate().atTime(9, 15)
-    if (!next.isAfter(now)) next = next.plusDays(1) // already past 9:15 today: start tomorrow
-
-    val request = PeriodicWorkRequestBuilder<BriefingCheckWorker>(Duration.ofDays(1))
-        .setInitialDelay(Duration.between(now, next))
+    val request = OneTimeWorkRequestBuilder<BriefingCheckWorker>()
+        .setInitialDelay(Duration.between(now, nextCheckTime(now, foundToday)))
         .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-        .setBackoffCriteria(BackoffPolicy.LINEAR, Duration.ofMinutes(15))
         .build()
+    WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, request)
+}
 
-    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-        WORK_NAME, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, request
-    )
+// Checks run at 9:00, 10:00, 11:00, 12:00 and 13:00, then again tomorrow at 9:00.
+// Once today's briefing has been found, skip straight to tomorrow.
+fun nextCheckTime(now: LocalDateTime, foundToday: Boolean): LocalDateTime {
+    val firstToday = now.toLocalDate().atTime(FIRST_HOUR, 0)
+    val lastToday = now.toLocalDate().atTime(LAST_HOUR, 0)
+    val nextFullHour = now.truncatedTo(ChronoUnit.HOURS).plusHours(1)
+    return when {
+        foundToday -> firstToday.plusDays(1)
+        now < firstToday -> firstToday              // before 9:00: first check at 9:00
+        nextFullHour <= lastToday -> nextFullHour   // between 9:00 and 13:00: next full hour
+        else -> firstToday.plusDays(1)              // after 13:00: tomorrow at 9:00
+    }
 }
 
 fun showBriefingNotification(context: Context, entry: BriefingEntry) {
