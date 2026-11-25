@@ -2,14 +2,20 @@ package com.nmanojlovski.briefing
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -18,9 +24,13 @@ import com.nmanojlovski.briefing.ui.theme.BriefingTheme
 import kotlinx.serialization.Serializable
 
 // The app's screens ("routes"). A route is like an address that Navigation can go to and come back from.
-@Serializable data object LatestRoute
+@Serializable data object HomeRoute
 @Serializable data object HistoryRoute
 @Serializable data class ReaderRoute(val title: String, val url: String)
+
+// Put on the notification's tap action, so the app can open that briefing straight away.
+const val EXTRA_TITLE = "briefing_title"
+const val EXTRA_URL = "briefing_url"
 
 class MainActivity : ComponentActivity() {
     // `by viewModels()` creates the ViewModel once and gives back the same one after a rotation.
@@ -32,7 +42,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Draw behind the system bars, with light status bar icons: every screen has a navy top.
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT))
         // Since Android 13 an app must ask before it may show notifications.
         if (savedInstanceState == null &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -40,9 +51,21 @@ class MainActivity : ComponentActivity() {
         ) {
             askNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+
+        // Opened by tapping the notification? Then show that briefing on top of the main menu.
+        // Only on a fresh start: after a rotation, Navigation already remembers where you were.
+        // The URL check makes sure no other app can make us open some random page.
+        val title = intent.getStringExtra(EXTRA_TITLE)
+        val url = intent.getStringExtra(EXTRA_URL)
+        val openFirst = if (savedInstanceState == null && title != null && url != null && url.startsWith(BASE_URL)) {
+            ReaderRoute(title, url)
+        } else {
+            null
+        }
+
         setContent {
             BriefingTheme {
-                BriefingApp(viewModel)
+                BriefingApp(viewModel, openFirst)
             }
         }
     }
@@ -57,13 +80,25 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun BriefingApp(viewModel: BriefingViewModel) {
+fun BriefingApp(viewModel: BriefingViewModel, openFirst: ReaderRoute?) {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = LatestRoute) {
-        composable<LatestRoute> {
-            LatestScreen(
+    LaunchedEffect(Unit) {
+        if (openFirst != null) navController.navigate(openFirst)
+    }
+    NavHost(
+        navController = navController,
+        startDestination = HomeRoute,
+        // New screens slide in from the right; going back slides them out again.
+        enterTransition = { slideIntoContainer(SlideDirection.Start) + fadeIn() },
+        exitTransition = { slideOutOfContainer(SlideDirection.Start, targetOffset = { it / 4 }) + fadeOut() },
+        popEnterTransition = { slideIntoContainer(SlideDirection.End, initialOffset = { it / 4 }) + fadeIn() },
+        popExitTransition = { slideOutOfContainer(SlideDirection.End) + fadeOut() }
+    ) {
+        composable<HomeRoute> {
+            HomeScreen(
                 state = viewModel.state,
                 onRetry = viewModel::refresh,
+                onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) },
                 onShowAll = { navController.navigate(HistoryRoute) }
             )
         }

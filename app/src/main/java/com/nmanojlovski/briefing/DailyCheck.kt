@@ -77,10 +77,15 @@ fun showBriefingNotification(context: Context, entry: BriefingEntry) {
         NotificationChannel(CHANNEL_ID, "Daily briefing", NotificationManager.IMPORTANCE_DEFAULT)
     )
 
-    // Tapping restarts the app on its first screen, which shows the newest (= today's) briefing.
+    // Tapping restarts the app and opens this briefing (on top of the main menu).
     val intent = Intent(context, MainActivity::class.java)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-    val onTap = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        .putExtra(EXTRA_TITLE, entry.title)
+        .putExtra(EXTRA_URL, entry.fullUrl)
+    // FLAG_UPDATE_CURRENT: replace yesterday's extras with today's briefing.
+    val onTap = PendingIntent.getActivity(
+        context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    )
 
     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_notification)
