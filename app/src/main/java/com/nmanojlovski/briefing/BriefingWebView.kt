@@ -2,9 +2,11 @@ package com.nmanojlovski.briefing
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.view.ContextThemeWrapper
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,11 +53,16 @@ fun BriefingWebView(url: String, modifier: Modifier = Modifier) {
 
     Box(modifier = modifier.fillMaxSize()) {
         val page = html
-        if (page != null) {
+        // Light or dark right now (including the sun/moon choice). When it changes,
+        // key() throws the old WebView away and builds a new one with the right colours.
+        val dark = isSystemInDarkTheme()
+        if (page != null) key(dark) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = {
-                    WebView(it).apply {
+                    // The page picks light or dark CSS from the theme of the WebView's context.
+                    // ContextThemeWrapper reads the app theme afresh, so it matches the current mode.
+                    WebView(ContextThemeWrapper(it, R.style.Theme_Briefing)).apply {
                         setBackgroundColor(Color.TRANSPARENT) // no white flash in dark mode
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {

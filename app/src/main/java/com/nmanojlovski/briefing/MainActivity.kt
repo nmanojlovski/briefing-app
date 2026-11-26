@@ -13,15 +13,25 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.nmanojlovski.briefing.ui.theme.BriefingTheme
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 
 // The app's screens ("routes"). A route is like an address that Navigation can go to and come back from.
@@ -33,6 +43,10 @@ import kotlinx.serialization.Serializable
 // Put on the notification's tap action, so the app can open that briefing straight away.
 const val EXTRA_TITLE = "briefing_title"
 const val EXTRA_URL = "briefing_url"
+
+// Android's default see-through colours behind the navigation bar buttons, in light and dark mode.
+private val LIGHT_SCRIM = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
+private val DARK_SCRIM = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
 
 class MainActivity : ComponentActivity() {
     // `by viewModels()` creates the ViewModel once and gives back the same one after a rotation.
@@ -72,8 +86,41 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
+            // Switching light/dark: a navy curtain fades in, the colours change behind it,
+            // we wait a moment for everything to repaint, and the curtain fades out again.
+            // null = not switching; true/false = switching to dark/light.
+            var switchingToDark by remember { mutableStateOf<Boolean?>(null) }
+            val curtain by animateFloatAsState(
+                targetValue = if (switchingToDark != null) 1f else 0f,
+                animationSpec = tween(durationMillis = 250),
+                label = "curtain"
+            )
+            LaunchedEffect(switchingToDark) {
+                val toDark = switchingToDark ?: return@LaunchedEffect
+                delay(250)                    // the curtain is fully closed
+                viewModel.setDarkMode(toDark) // the colours change behind it
+                delay(300)                    // let the screen settle
+                switchingToDark = null        // open the curtain again
+            }
+
+            // The navigation bar at the bottom follows light/dark too (the status bar is always on navy).
+            LaunchedEffect(dark) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+                    navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark }
+                )
+            }
+
             BriefingTheme(darkTheme = dark) {
-                BriefingApp(viewModel, openFirst, isDark = dark)
+                Box(Modifier.fillMaxSize()) {
+                    BriefingApp(
+                        viewModel,
+                        openFirst,
+                        isDark = dark,
+                        onToggleTheme = { if (switchingToDark == null) switchingToDark = !dark }
+                    )
+                    ThemeCurtain(alpha = curtain, moon = switchingToDark ?: dark)
+                }
             }
         }
     }
@@ -88,7 +135,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun BriefingApp(viewModel: BriefingViewModel, openFirst: ReaderRoute?, isDark: Boolean) {
+fun BriefingApp(
+    viewModel: BriefingViewModel,
+    openFirst: ReaderRoute?,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit
+) {
     val navController = rememberNavController()
     LaunchedEffect(Unit) {
         if (openFirst != null) navController.navigate(openFirst)
@@ -106,11 +158,9 @@ fun BriefingApp(viewModel: BriefingViewModel, openFirst: ReaderRoute?, isDark: B
             HomeScreen(
                 state = viewModel.state,
                 isDark = isDark,
-                onRetry = viewModel::refresh,
-                onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) },
                 onShowAll = { navController.navigate(HistoryRoute) },
                 onOpenWheel = { navController.navigate(WheelRoute) },
-                onToggleTheme = { viewModel.toggleTheme(isDarkNow = isDark) }
+                onToggleTheme = onToggleTheme
             )
         }
         composable<HistoryRoute> {

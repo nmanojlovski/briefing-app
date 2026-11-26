@@ -5,7 +5,6 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,8 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -30,18 +29,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -67,6 +63,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -87,13 +84,11 @@ import java.util.Locale
 
 // ===================== Screen 1: main menu =====================
 
-// Greeting and date on a dark blue band, today's briefing in a big card, then the menu.
+// Greeting and date on a dark blue band, then the menu.
 @Composable
 fun HomeScreen(
     state: IndexState,
     isDark: Boolean,
-    onRetry: () -> Unit,
-    onOpen: (BriefingEntry) -> Unit,
     onShowAll: () -> Unit,
     onOpenWheel: () -> Unit,
     onToggleTheme: () -> Unit
@@ -109,9 +104,7 @@ fun HomeScreen(
                 offline = (state as? IndexState.Loaded)?.offline == true,
                 isDark = isDark,
                 onToggleTheme = onToggleTheme
-            ) {
-                TodayCard(state, onRetry, onOpen)
-            }
+            )
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(
                     "Menu",
@@ -142,20 +135,14 @@ fun HomeScreen(
     }
 }
 
-// The dark blue band with a soft "rising sun". `card` is drawn so that its lower part
-// hangs below the band, which makes it look like it floats on top.
+// The dark blue band with a soft "rising sun", and the light/dark button in the top-left corner.
 @Composable
-private fun HomeHeader(
-    offline: Boolean,
-    isDark: Boolean,
-    onToggleTheme: () -> Unit,
-    card: @Composable () -> Unit
-) {
+private fun HomeHeader(offline: Boolean, isDark: Boolean, onToggleTheme: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .drawBehind {
-                val bandHeight = size.height - 80.dp.toPx()
+                val bandHeight = size.height
                 drawRect(
                     brush = Brush.verticalGradient(listOf(Navy, NavyLight), endY = bandHeight),
                     size = Size(size.width, bandHeight)
@@ -179,10 +166,9 @@ private fun HomeHeader(
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
     ) {
-        // The small light/dark button in the top-right corner.
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            ThemeToggle(isDark, onToggleTheme)
-        }
+        // The small light/dark button. The offset lines its circle up with the text below
+        // (the button's touch area is a bit bigger than the circle you see).
+        ThemeToggle(isDark, onToggleTheme, Modifier.offset(x = (-8).dp))
         Text(
             "DAILY BRIEFING",
             style = MaterialTheme.typography.labelLarge,
@@ -209,15 +195,14 @@ private fun HomeHeader(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
-        Spacer(Modifier.height(28.dp))
-        card()
+        Spacer(Modifier.height(32.dp))
     }
 }
 
 // Light/dark switch: a sun while the app is light, a moon while it's dark. Tap to switch.
 @Composable
-private fun ThemeToggle(isDark: Boolean, onToggle: () -> Unit) {
-    IconButton(onClick = onToggle) {
+private fun ThemeToggle(isDark: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onToggle, modifier = modifier) {
         Icon(
             painter = painterResource(if (isDark) R.drawable.ic_moon else R.drawable.ic_sun),
             contentDescription = if (isDark) "Switch to light mode" else "Switch to dark mode",
@@ -231,82 +216,23 @@ private fun ThemeToggle(isDark: Boolean, onToggle: () -> Unit) {
     }
 }
 
-// The big card: the newest briefing with a "Read now" button.
+// The curtain shown while switching between light and dark: navy with a sun or moon.
+// It fades in, the colours change behind it, and it fades out (see MainActivity).
 @Composable
-private fun TodayCard(state: IndexState, onRetry: () -> Unit, onOpen: (BriefingEntry) -> Unit) {
-    ElevatedCard(
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            when (state) {
-                IndexState.Loading -> Box(
-                    modifier = Modifier.fillMaxWidth().height(140.dp),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
-
-                is IndexState.Error -> {
-                    Text(state.message, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = onRetry) { Text("Try again") }
-                }
-
-                is IndexState.Loaded -> {
-                    val latest = state.entries.firstOrNull()
-                    if (latest == null) {
-                        Text("No briefings yet.", style = MaterialTheme.typography.bodyLarge)
-                    } else {
-                        LatestBriefing(latest, onOpen)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LatestBriefing(entry: BriefingEntry, onOpen: (BriefingEntry) -> Unit) {
-    val isToday = parseDate(entry.date) == LocalDate.now()
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Pill(if (isToday) "TODAY'S BRIEFING" else "LATEST BRIEFING", highlighted = isToday)
-        Spacer(Modifier.weight(1f))
-        AppBadge()
-    }
-    Spacer(Modifier.height(12.dp))
-    Text(entry.title, style = MaterialTheme.typography.titleLarge)
-    Spacer(Modifier.height(4.dp))
-    Text(
-        friendlyDate(entry.date),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(Modifier.height(20.dp))
-    Button(
-        onClick = { onOpen(entry) },
-        colors = ButtonDefaults.buttonColors(containerColor = Sun, contentColor = Navy),
-        contentPadding = PaddingValues(vertical = 14.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text("Read now", fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(8.dp))
-        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-    }
-}
-
-// The app icon (page + sun) in a small navy circle.
-@Composable
-private fun AppBadge() {
+fun ThemeCurtain(alpha: Float, moon: Boolean) {
+    if (alpha == 0f) return
     Box(
-        modifier = Modifier.size(56.dp).clip(CircleShape).background(Navy),
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = alpha }
+            .background(Navy),
         contentAlignment = Alignment.Center
     ) {
-        // The icon drawing has empty space around it, so draw it bigger than the circle.
-        Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),
+        Icon(
+            painter = painterResource(if (moon) R.drawable.ic_moon else R.drawable.ic_sun),
             contentDescription = null,
-            modifier = Modifier.requiredSize(90.dp)
+            tint = Sun,
+            modifier = Modifier.size(56.dp)
         )
     }
 }
