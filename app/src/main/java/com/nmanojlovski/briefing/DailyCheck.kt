@@ -29,11 +29,17 @@ class BriefingCheckWorker(context: Context, params: WorkerParameters) : Coroutin
     override suspend fun doWork(): Result {
         val today = LocalDate.now().toString() // e.g. "2026-11-26", the same format as index.json
         val todays = try {
-            briefingApi.getIndex().find { it.date == today }
+            fetchIndex(applicationContext).find { it.date == today }
         } catch (e: Exception) {
             null // no internet or a server problem: treat it like "not published yet"
         }
-        if (todays != null) showBriefingNotification(applicationContext, todays)
+        if (todays != null) {
+            // Download the page right away, so it's saved on the phone and can be read
+            // without internet later (on the bus), even if you never opened the app today.
+            loadPage(applicationContext, todays.fullUrl)
+            showBriefingNotification(applicationContext, todays)
+        }
+        updateWidgets(applicationContext) // the home screen widget shows the newest headlines
 
         // APPEND_OR_REPLACE: queue the next check to start after this one finishes.
         scheduleCheck(applicationContext, foundToday = todays != null, ExistingWorkPolicy.APPEND_OR_REPLACE)
