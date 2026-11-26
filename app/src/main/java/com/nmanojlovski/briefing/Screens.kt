@@ -32,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -86,7 +87,8 @@ fun HomeScreen(
     state: IndexState,
     onRetry: () -> Unit,
     onOpen: (BriefingEntry) -> Unit,
-    onShowAll: () -> Unit
+    onShowAll: () -> Unit,
+    onOpenWheel: () -> Unit
 ) {
     // Surface paints the background and sets the matching text colour (light text in dark mode).
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -114,6 +116,13 @@ fun HomeScreen(
                         is IndexState.Error -> "Browse all briefings"
                     },
                     onClick = onShowAll
+                )
+                Spacer(Modifier.height(12.dp))
+                MenuTile(
+                    icon = Icons.Default.Refresh,
+                    title = "Spin the wheel",
+                    subtitle = "Let the wheel pick a name",
+                    onClick = onOpenWheel
                 )
                 Spacer(Modifier.height(24.dp))
             }
@@ -522,7 +531,7 @@ private fun Pill(text: String, highlighted: Boolean) {
 }
 
 @Composable
-private fun BackButton(onBack: () -> Unit) {
+fun BackButton(onBack: () -> Unit) {
     IconButton(onClick = onBack) {
         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
     }
@@ -531,7 +540,7 @@ private fun BackButton(onBack: () -> Unit) {
 // Navy top bars with white text, in light and dark mode.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun brandTopBarColors() = TopAppBarDefaults.topAppBarColors(
+fun brandTopBarColors() = TopAppBarDefaults.topAppBarColors(
     containerColor = Navy,
     scrolledContainerColor = Navy,
     titleContentColor = Color.White,
