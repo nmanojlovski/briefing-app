@@ -105,9 +105,9 @@ class BriefingViewModel(private val app: Application) : AndroidViewModel(app) {
         if (file in archived) viewModelScope.launch { loadPage(app, url) }
     }
 
-    // The "Appearance" button: Same as phone -> Light -> Dark -> Same as phone.
-    fun nextThemeMode() {
-        themeMode = themeMode.next()
+    // The sun/moon button: switch to the opposite of what the app shows right now.
+    fun toggleTheme(isDarkNow: Boolean) {
+        themeMode = if (isDarkNow) ThemeMode.LIGHT else ThemeMode.DARK
         saveThemeMode(app, themeMode)
         applyThemeMode(app, themeMode)
     }

@@ -5,16 +5,10 @@ import android.content.Context
 import android.os.Build
 
 // ===================== Light / dark mode =====================
-// Chosen with the "Appearance" button on the main menu and saved on the phone.
+// Chosen with the small sun/moon button in the corner of the main menu, and saved on the phone.
+// Until you tap it the app follows the phone (SYSTEM); after that it stays light or dark.
 
-enum class ThemeMode(val label: String) {
-    SYSTEM("Same as phone"),
-    LIGHT("Light"),
-    DARK("Dark");
-
-    // Each tap on the button moves to the next one: Same as phone -> Light -> Dark -> Same as phone.
-    fun next(): ThemeMode = entries[(ordinal + 1) % entries.size]
-}
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 private const val PREFS = "settings"
 private const val KEY_THEME = "theme"

@@ -34,7 +34,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -92,14 +91,12 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     state: IndexState,
+    isDark: Boolean,
     onRetry: () -> Unit,
     onOpen: (BriefingEntry) -> Unit,
-    archivedCount: Int,
-    themeMode: ThemeMode,
     onShowAll: () -> Unit,
-    onOpenArchive: () -> Unit,
     onOpenWheel: () -> Unit,
-    onChangeTheme: () -> Unit
+    onToggleTheme: () -> Unit
 ) {
     // Surface paints the background and sets the matching text colour (light text in dark mode).
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -108,7 +105,11 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
         ) {
-            HomeHeader(offline = (state as? IndexState.Loaded)?.offline == true) {
+            HomeHeader(
+                offline = (state as? IndexState.Loaded)?.offline == true,
+                isDark = isDark,
+                onToggleTheme = onToggleTheme
+            ) {
                 TodayCard(state, onRetry, onOpen)
             }
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -130,29 +131,10 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 MenuTile(
-                    icon = Icons.Default.Star,
-                    title = "Archive",
-                    subtitle = when (archivedCount) {
-                        0 -> "Tap ★ in a briefing to keep it for good"
-                        1 -> "1 briefing kept for good"
-                        else -> "$archivedCount briefings kept for good"
-                    },
-                    onClick = onOpenArchive
-                )
-                Spacer(Modifier.height(12.dp))
-                MenuTile(
                     icon = Icons.Default.Refresh,
                     title = "Spin the wheel",
                     subtitle = "Let the wheel pick a name",
                     onClick = onOpenWheel
-                )
-                Spacer(Modifier.height(12.dp))
-                // Each tap switches: Same as phone -> Light -> Dark.
-                MenuTile(
-                    icon = Icons.Default.Settings,
-                    title = "Appearance",
-                    subtitle = "${themeMode.label} · tap to change",
-                    onClick = onChangeTheme
                 )
                 Spacer(Modifier.height(24.dp))
             }
@@ -163,7 +145,12 @@ fun HomeScreen(
 // The dark blue band with a soft "rising sun". `card` is drawn so that its lower part
 // hangs below the band, which makes it look like it floats on top.
 @Composable
-private fun HomeHeader(offline: Boolean, card: @Composable () -> Unit) {
+private fun HomeHeader(
+    offline: Boolean,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit,
+    card: @Composable () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -192,7 +179,10 @@ private fun HomeHeader(offline: Boolean, card: @Composable () -> Unit) {
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
     ) {
-        Spacer(Modifier.height(32.dp))
+        // The small light/dark button in the top-right corner.
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            ThemeToggle(isDark, onToggleTheme)
+        }
         Text(
             "DAILY BRIEFING",
             style = MaterialTheme.typography.labelLarge,
@@ -221,6 +211,23 @@ private fun HomeHeader(offline: Boolean, card: @Composable () -> Unit) {
         }
         Spacer(Modifier.height(28.dp))
         card()
+    }
+}
+
+// Light/dark switch: a sun while the app is light, a moon while it's dark. Tap to switch.
+@Composable
+private fun ThemeToggle(isDark: Boolean, onToggle: () -> Unit) {
+    IconButton(onClick = onToggle) {
+        Icon(
+            painter = painterResource(if (isDark) R.drawable.ic_moon else R.drawable.ic_sun),
+            contentDescription = if (isDark) "Switch to light mode" else "Switch to dark mode",
+            tint = Color.White,
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.15f))
+                .padding(7.dp)
+        )
     }
 }
 
@@ -351,14 +358,13 @@ private fun MenuTile(icon: ImageVector, title: String, subtitle: String, onClick
 fun HistoryScreen(
     state: IndexState,
     archived: Set<String>,
-    startWithArchive: Boolean,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onOpen: (BriefingEntry) -> Unit,
     onBack: () -> Unit
 ) {
-    // rememberSaveable: keeps the choice when the phone is rotated.
-    var onlyArchived by rememberSaveable { mutableStateOf(startWithArchive) }
+    // The ★ in the top bar switches this. rememberSaveable keeps the choice when the phone is rotated.
+    var onlyArchived by rememberSaveable { mutableStateOf(false) }
     // The big title shrinks into a normal top bar as you scroll down.
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
