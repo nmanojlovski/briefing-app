@@ -27,6 +27,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object HomeRoute
 @Serializable data object HistoryRoute
 @Serializable data class ReaderRoute(val title: String, val url: String)
+@Serializable data object WheelRoute
 
 // Put on the notification's tap action, so the app can open that briefing straight away.
 const val EXTRA_TITLE = "briefing_title"
@@ -99,7 +100,8 @@ fun BriefingApp(viewModel: BriefingViewModel, openFirst: ReaderRoute?) {
                 state = viewModel.state,
                 onRetry = viewModel::refresh,
                 onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) },
-                onShowAll = { navController.navigate(HistoryRoute) }
+                onShowAll = { navController.navigate(HistoryRoute) },
+                onOpenWheel = { navController.navigate(WheelRoute) }
             )
         }
         composable<HistoryRoute> {
@@ -114,6 +116,9 @@ fun BriefingApp(viewModel: BriefingViewModel, openFirst: ReaderRoute?) {
         composable<ReaderRoute> { backStackEntry ->
             val route: ReaderRoute = backStackEntry.toRoute()
             ReaderScreen(title = route.title, url = route.url, onBack = { navController.navigateUp() })
+        }
+        composable<WheelRoute> {
+            WheelScreen(onBack = { navController.navigateUp() })
         }
     }
 }
