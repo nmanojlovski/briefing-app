@@ -52,6 +52,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,7 +63,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -77,7 +77,9 @@ import androidx.compose.ui.unit.sp
 import com.nmanojlovski.briefing.ui.theme.Navy
 import com.nmanojlovski.briefing.ui.theme.NavyLight
 import com.nmanojlovski.briefing.ui.theme.Sun
+import kotlinx.coroutines.delay
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -135,34 +137,20 @@ fun HomeScreen(
     }
 }
 
-// The dark blue band with a soft "rising sun", and the light/dark button in the top-left corner.
+// The dark blue band with the sun or the moon (see Sky.kt), and the light/dark button top-left.
 @Composable
 private fun HomeHeader(offline: Boolean, isDark: Boolean, onToggleTheme: () -> Unit) {
+    // Worked out again every minute while the menu is open, so the sun moves and the moon comes out.
+    val sky by produceState(initialValue = skyAt(LocalDateTime.now())) {
+        while (true) {
+            delay(60_000)
+            value = skyAt(LocalDateTime.now())
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .drawBehind {
-                val bandHeight = size.height
-                drawRect(
-                    brush = Brush.verticalGradient(listOf(Navy, NavyLight), endY = bandHeight),
-                    size = Size(size.width, bandHeight)
-                )
-                // The sun: a glow plus a solid circle, only inside the band.
-                clipRect(bottom = bandHeight) {
-                    val sunCenter = Offset(size.width - 60.dp.toPx(), 110.dp.toPx())
-                    val glowRadius = 160.dp.toPx()
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            listOf(Sun.copy(alpha = 0.45f), Color.Transparent),
-                            center = sunCenter,
-                            radius = glowRadius
-                        ),
-                        radius = glowRadius,
-                        center = sunCenter
-                    )
-                    drawCircle(color = Sun, radius = 28.dp.toPx(), center = sunCenter)
-                }
-            }
+            .drawBehind { drawSky(sky) }
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
     ) {
