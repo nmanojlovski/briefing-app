@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sun icon for the light/dark button: a circle with 8 short rays. The button tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,7.5a4.5,4.5 0,1 1,0 9a4.5,4.5 0,1 1,0 -9z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M12,1.5v2.2 M12,20.3v2.2 M1.5,12h2.2 M20.3,12h2.2 M4.6,4.6l1.6,1.6 M17.8,17.8l1.6,1.6 M4.6,19.4l1.6,-1.6 M17.8,6.2l1.6,-1.6" />
+</vector>

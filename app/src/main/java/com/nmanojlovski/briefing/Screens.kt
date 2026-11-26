@@ -2,9 +2,9 @@ package com.nmanojlovski.briefing
 
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -29,16 +29,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,6 +50,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +63,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -73,20 +77,23 @@ import androidx.compose.ui.unit.sp
 import com.nmanojlovski.briefing.ui.theme.Navy
 import com.nmanojlovski.briefing.ui.theme.NavyLight
 import com.nmanojlovski.briefing.ui.theme.Sun
+import kotlinx.coroutines.delay
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // ===================== Screen 1: main menu =====================
 
-// Greeting and date on a dark blue band, today's briefing in a big card, then the menu.
+// Greeting and date on a dark blue band, then the menu.
 @Composable
 fun HomeScreen(
     state: IndexState,
-    onRetry: () -> Unit,
-    onOpen: (BriefingEntry) -> Unit,
-    onShowAll: () -> Unit
+    isDark: Boolean,
+    onShowAll: () -> Unit,
+    onOpenWheel: () -> Unit,
+    onToggleTheme: () -> Unit
 ) {
     // Surface paints the background and sets the matching text colour (light text in dark mode).
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -95,9 +102,11 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
         ) {
-            HomeHeader(offline = (state as? IndexState.Loaded)?.offline == true) {
-                TodayCard(state, onRetry, onOpen)
-            }
+            HomeHeader(
+                offline = (state as? IndexState.Loaded)?.offline == true,
+                isDark = isDark,
+                onToggleTheme = onToggleTheme
+            )
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(
                     "Menu",
@@ -115,45 +124,39 @@ fun HomeScreen(
                     },
                     onClick = onShowAll
                 )
+                Spacer(Modifier.height(12.dp))
+                MenuTile(
+                    icon = Icons.Default.Refresh,
+                    title = "Spin the wheel",
+                    subtitle = "Let the wheel pick a name",
+                    onClick = onOpenWheel
+                )
                 Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
-// The dark blue band with a soft "rising sun". `card` is drawn so that its lower part
-// hangs below the band, which makes it look like it floats on top.
+// The dark blue band with the sun or the moon (see Sky.kt), and the light/dark button top-left.
 @Composable
-private fun HomeHeader(offline: Boolean, card: @Composable () -> Unit) {
+private fun HomeHeader(offline: Boolean, isDark: Boolean, onToggleTheme: () -> Unit) {
+    // Worked out again every minute while the menu is open, so the sun moves and the moon comes out.
+    val sky by produceState(initialValue = skyAt(LocalDateTime.now())) {
+        while (true) {
+            delay(60_000)
+            value = skyAt(LocalDateTime.now())
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .drawBehind {
-                val bandHeight = size.height - 80.dp.toPx()
-                drawRect(
-                    brush = Brush.verticalGradient(listOf(Navy, NavyLight), endY = bandHeight),
-                    size = Size(size.width, bandHeight)
-                )
-                // The sun: a glow plus a solid circle, only inside the band.
-                clipRect(bottom = bandHeight) {
-                    val sunCenter = Offset(size.width - 60.dp.toPx(), 110.dp.toPx())
-                    val glowRadius = 160.dp.toPx()
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            listOf(Sun.copy(alpha = 0.45f), Color.Transparent),
-                            center = sunCenter,
-                            radius = glowRadius
-                        ),
-                        radius = glowRadius,
-                        center = sunCenter
-                    )
-                    drawCircle(color = Sun, radius = 28.dp.toPx(), center = sunCenter)
-                }
-            }
+            .drawBehind { drawSky(sky) }
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
     ) {
-        Spacer(Modifier.height(32.dp))
+        // The small light/dark button. The offset lines its circle up with the text below
+        // (the button's touch area is a bit bigger than the circle you see).
+        ThemeToggle(isDark, onToggleTheme, Modifier.offset(x = (-8).dp))
         Text(
             "DAILY BRIEFING",
             style = MaterialTheme.typography.labelLarge,
@@ -180,87 +183,44 @@ private fun HomeHeader(offline: Boolean, card: @Composable () -> Unit) {
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
-        Spacer(Modifier.height(28.dp))
-        card()
+        Spacer(Modifier.height(32.dp))
     }
 }
 
-// The big card: the newest briefing with a "Read now" button.
+// Light/dark switch: a sun while the app is light, a moon while it's dark. Tap to switch.
 @Composable
-private fun TodayCard(state: IndexState, onRetry: () -> Unit, onOpen: (BriefingEntry) -> Unit) {
-    ElevatedCard(
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            when (state) {
-                IndexState.Loading -> Box(
-                    modifier = Modifier.fillMaxWidth().height(140.dp),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator() }
-
-                is IndexState.Error -> {
-                    Text(state.message, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = onRetry) { Text("Try again") }
-                }
-
-                is IndexState.Loaded -> {
-                    val latest = state.entries.firstOrNull()
-                    if (latest == null) {
-                        Text("No briefings yet.", style = MaterialTheme.typography.bodyLarge)
-                    } else {
-                        LatestBriefing(latest, onOpen)
-                    }
-                }
-            }
-        }
+private fun ThemeToggle(isDark: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onToggle, modifier = modifier) {
+        Icon(
+            painter = painterResource(if (isDark) R.drawable.ic_moon else R.drawable.ic_sun),
+            contentDescription = if (isDark) "Switch to light mode" else "Switch to dark mode",
+            tint = Color.White,
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.15f))
+                .padding(7.dp)
+        )
     }
 }
 
+// The curtain shown while switching between light and dark: navy with a sun or moon.
+// It fades in, the colours change behind it, and it fades out (see MainActivity).
 @Composable
-private fun LatestBriefing(entry: BriefingEntry, onOpen: (BriefingEntry) -> Unit) {
-    val isToday = parseDate(entry.date) == LocalDate.now()
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Pill(if (isToday) "TODAY'S BRIEFING" else "LATEST BRIEFING", highlighted = isToday)
-        Spacer(Modifier.weight(1f))
-        AppBadge()
-    }
-    Spacer(Modifier.height(12.dp))
-    Text(entry.title, style = MaterialTheme.typography.titleLarge)
-    Spacer(Modifier.height(4.dp))
-    Text(
-        friendlyDate(entry.date),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(Modifier.height(20.dp))
-    Button(
-        onClick = { onOpen(entry) },
-        colors = ButtonDefaults.buttonColors(containerColor = Sun, contentColor = Navy),
-        contentPadding = PaddingValues(vertical = 14.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text("Read now", fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(8.dp))
-        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-    }
-}
-
-// The app icon (page + sun) in a small navy circle.
-@Composable
-private fun AppBadge() {
+fun ThemeCurtain(alpha: Float, moon: Boolean) {
+    if (alpha == 0f) return
     Box(
-        modifier = Modifier.size(56.dp).clip(CircleShape).background(Navy),
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = alpha }
+            .background(Navy),
         contentAlignment = Alignment.Center
     ) {
-        // The icon drawing has empty space around it, so draw it bigger than the circle.
-        Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),
+        Icon(
+            painter = painterResource(if (moon) R.drawable.ic_moon else R.drawable.ic_sun),
             contentDescription = null,
-            modifier = Modifier.requiredSize(90.dp)
+            tint = Sun,
+            modifier = Modifier.size(56.dp)
         )
     }
 }
@@ -306,49 +266,82 @@ private fun MenuTile(icon: ImageVector, title: String, subtitle: String, onClick
 // ===================== Screen 2: all briefings =====================
 
 // Every briefing as a card, grouped by month. Pull down to reload the list.
+// The ★ in the top bar switches between all briefings and only the archived ones.
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(
     state: IndexState,
+    archived: Set<String>,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onOpen: (BriefingEntry) -> Unit,
     onBack: () -> Unit
 ) {
+    // The ★ in the top bar switches this. rememberSaveable keeps the choice when the phone is rotated.
+    var onlyArchived by rememberSaveable { mutableStateOf(false) }
     // The big title shrinks into a normal top bar as you scroll down.
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = { Text("All briefings") },
+                title = { Text(if (onlyArchived) "Archive" else "All briefings") },
                 navigationIcon = { BackButton(onBack) },
+                actions = {
+                    IconButton(onClick = { onlyArchived = !onlyArchived }) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = if (onlyArchived) "Show all briefings" else "Show only archived",
+                            tint = if (onlyArchived) Sun else Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                },
                 colors = brandTopBarColors(),
                 scrollBehavior = scrollBehavior
             )
         }
     ) { innerPadding ->
         IndexContent(state, onRetry = onRefresh, Modifier.padding(innerPadding)) { loaded ->
+            val shown = if (onlyArchived) {
+                loaded.entries.filter { briefingFileName(it.url) in archived }
+            } else {
+                loaded.entries
+            }
             PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
                 ) {
+                    if (onlyArchived && shown.isEmpty()) {
+                        item {
+                            Text(
+                                "No archived briefings yet.\nOpen a briefing and tap ★ to keep it on the phone for good. " +
+                                    "Others are deleted from the phone after $KEEP_DAYS days.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, top = 24.dp)
+                            )
+                        }
+                    }
                     item {
                         Text(
-                            "${countText(loaded.entries.size)} · updated ${loaded.updatedAt.format(UPDATED_FORMAT)}",
+                            "${countText(shown.size)} · updated ${loaded.updatedAt.format(UPDATED_FORMAT)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 4.dp, top = 16.dp)
                         )
                     }
                     // One group per month; the month name stays on top while you scroll through it.
-                    loaded.entries
+                    shown
                         .groupBy { parseDate(it.date)?.format(MONTH_YEAR) ?: "Other" }
                         .forEach { (month, entries) ->
                             stickyHeader { MonthHeader(month) }
                             items(entries) { entry ->
-                                BriefingCard(entry, onClick = { onOpen(entry) })
+                                BriefingCard(
+                                    entry,
+                                    archived = briefingFileName(entry.url) in archived,
+                                    onClick = { onOpen(entry) }
+                                )
                                 Spacer(Modifier.height(12.dp))
                             }
                         }
@@ -373,9 +366,9 @@ private fun MonthHeader(month: String) {
 }
 
 // A briefing in the list: calendar-style date, title, "Today"/"Yesterday"/weekday.
-// Today's briefing gets a sun-coloured border and a NEW tag.
+// Today's briefing gets a sun-coloured border and a NEW tag; archived ones get a ★.
 @Composable
-private fun BriefingCard(entry: BriefingEntry, onClick: () -> Unit) {
+private fun BriefingCard(entry: BriefingEntry, archived: Boolean, onClick: () -> Unit) {
     val date = parseDate(entry.date)
     val isToday = date == LocalDate.now()
     Card(
@@ -402,6 +395,10 @@ private fun BriefingCard(entry: BriefingEntry, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            if (archived) {
+                Icon(Icons.Default.Star, contentDescription = "Archived", tint = Sun, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(4.dp))
             }
             if (isToday) Pill("NEW", highlighted = true)
             Icon(
@@ -441,9 +438,10 @@ private fun DateBadge(date: LocalDate?) {
 
 // ===================== Screen 3: one briefing =====================
 
+// ★ archives the briefing: it then stays on the phone for good instead of KEEP_DAYS days.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReaderScreen(title: String, url: String, onBack: () -> Unit) {
+fun ReaderScreen(title: String, url: String, archived: Boolean, onToggleArchive: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     Scaffold(
         topBar = {
@@ -451,6 +449,21 @@ fun ReaderScreen(title: String, url: String, onBack: () -> Unit) {
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { BackButton(onBack) },
                 actions = {
+                    IconButton(onClick = {
+                        onToggleArchive()
+                        val message = if (archived) {
+                            "Removed from the archive"
+                        } else {
+                            "Archived: kept on the phone for good"
+                        }
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = if (archived) "Remove from archive" else "Archive",
+                            tint = if (archived) Sun else Color.White.copy(alpha = 0.6f)
+                        )
+                    }
                     IconButton(onClick = { shareBriefing(context, title, url) }) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
                     }
@@ -522,7 +535,7 @@ private fun Pill(text: String, highlighted: Boolean) {
 }
 
 @Composable
-private fun BackButton(onBack: () -> Unit) {
+fun BackButton(onBack: () -> Unit) {
     IconButton(onClick = onBack) {
         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
     }
@@ -531,7 +544,7 @@ private fun BackButton(onBack: () -> Unit) {
 // Navy top bars with white text, in light and dark mode.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun brandTopBarColors() = TopAppBarDefaults.topAppBarColors(
+fun brandTopBarColors() = TopAppBarDefaults.topAppBarColors(
     containerColor = Navy,
     scrolledContainerColor = Navy,
     titleContentColor = Color.White,
