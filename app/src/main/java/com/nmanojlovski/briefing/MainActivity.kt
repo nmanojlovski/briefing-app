@@ -14,6 +14,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
@@ -25,7 +26,7 @@ import kotlinx.serialization.Serializable
 
 // The app's screens ("routes"). A route is like an address that Navigation can go to and come back from.
 @Serializable data object HomeRoute
-@Serializable data object HistoryRoute
+@Serializable data class HistoryRoute(val onlyArchived: Boolean = false)
 @Serializable data class ReaderRoute(val title: String, val url: String)
 @Serializable data object WheelRoute
 
@@ -65,7 +66,13 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            BriefingTheme {
+            // The "Appearance" button on the main menu decides light or dark.
+            val dark = when (viewModel.themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            BriefingTheme(darkTheme = dark) {
                 BriefingApp(viewModel, openFirst)
             }
         }
@@ -100,13 +107,20 @@ fun BriefingApp(viewModel: BriefingViewModel, openFirst: ReaderRoute?) {
                 state = viewModel.state,
                 onRetry = viewModel::refresh,
                 onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) },
-                onShowAll = { navController.navigate(HistoryRoute) },
-                onOpenWheel = { navController.navigate(WheelRoute) }
+                archivedCount = viewModel.archived.size,
+                themeMode = viewModel.themeMode,
+                onShowAll = { navController.navigate(HistoryRoute()) },
+                onOpenArchive = { navController.navigate(HistoryRoute(onlyArchived = true)) },
+                onOpenWheel = { navController.navigate(WheelRoute) },
+                onChangeTheme = viewModel::nextThemeMode
             )
         }
-        composable<HistoryRoute> {
+        composable<HistoryRoute> { backStackEntry ->
+            val route: HistoryRoute = backStackEntry.toRoute()
             HistoryScreen(
                 state = viewModel.state,
+                archived = viewModel.archived,
+                startWithArchive = route.onlyArchived,
                 isRefreshing = viewModel.isRefreshing,
                 onRefresh = viewModel::refresh,
                 onOpen = { entry -> navController.navigate(ReaderRoute(entry.title, entry.fullUrl)) },
@@ -115,7 +129,13 @@ fun BriefingApp(viewModel: BriefingViewModel, openFirst: ReaderRoute?) {
         }
         composable<ReaderRoute> { backStackEntry ->
             val route: ReaderRoute = backStackEntry.toRoute()
-            ReaderScreen(title = route.title, url = route.url, onBack = { navController.navigateUp() })
+            ReaderScreen(
+                title = route.title,
+                url = route.url,
+                archived = briefingFileName(route.url) in viewModel.archived,
+                onToggleArchive = { viewModel.toggleArchive(route.url) },
+                onBack = { navController.navigateUp() }
+            )
         }
         composable<WheelRoute> {
             WheelScreen(onBack = { navController.navigateUp() })

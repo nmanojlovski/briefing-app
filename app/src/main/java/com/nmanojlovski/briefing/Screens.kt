@@ -2,6 +2,7 @@ package com.nmanojlovski.briefing
 
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -33,7 +34,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,6 +55,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,8 +94,12 @@ fun HomeScreen(
     state: IndexState,
     onRetry: () -> Unit,
     onOpen: (BriefingEntry) -> Unit,
+    archivedCount: Int,
+    themeMode: ThemeMode,
     onShowAll: () -> Unit,
-    onOpenWheel: () -> Unit
+    onOpenArchive: () -> Unit,
+    onOpenWheel: () -> Unit,
+    onChangeTheme: () -> Unit
 ) {
     // Surface paints the background and sets the matching text colour (light text in dark mode).
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -119,10 +130,29 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 MenuTile(
+                    icon = Icons.Default.Star,
+                    title = "Archive",
+                    subtitle = when (archivedCount) {
+                        0 -> "Tap ★ in a briefing to keep it for good"
+                        1 -> "1 briefing kept for good"
+                        else -> "$archivedCount briefings kept for good"
+                    },
+                    onClick = onOpenArchive
+                )
+                Spacer(Modifier.height(12.dp))
+                MenuTile(
                     icon = Icons.Default.Refresh,
                     title = "Spin the wheel",
                     subtitle = "Let the wheel pick a name",
                     onClick = onOpenWheel
+                )
+                Spacer(Modifier.height(12.dp))
+                // Each tap switches: Same as phone -> Light -> Dark.
+                MenuTile(
+                    icon = Icons.Default.Settings,
+                    title = "Appearance",
+                    subtitle = "${themeMode.label} · tap to change",
+                    onClick = onChangeTheme
                 )
                 Spacer(Modifier.height(24.dp))
             }
@@ -315,49 +345,83 @@ private fun MenuTile(icon: ImageVector, title: String, subtitle: String, onClick
 // ===================== Screen 2: all briefings =====================
 
 // Every briefing as a card, grouped by month. Pull down to reload the list.
+// The ★ in the top bar switches between all briefings and only the archived ones.
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(
     state: IndexState,
+    archived: Set<String>,
+    startWithArchive: Boolean,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onOpen: (BriefingEntry) -> Unit,
     onBack: () -> Unit
 ) {
+    // rememberSaveable: keeps the choice when the phone is rotated.
+    var onlyArchived by rememberSaveable { mutableStateOf(startWithArchive) }
     // The big title shrinks into a normal top bar as you scroll down.
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = { Text("All briefings") },
+                title = { Text(if (onlyArchived) "Archive" else "All briefings") },
                 navigationIcon = { BackButton(onBack) },
+                actions = {
+                    IconButton(onClick = { onlyArchived = !onlyArchived }) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = if (onlyArchived) "Show all briefings" else "Show only archived",
+                            tint = if (onlyArchived) Sun else Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                },
                 colors = brandTopBarColors(),
                 scrollBehavior = scrollBehavior
             )
         }
     ) { innerPadding ->
         IndexContent(state, onRetry = onRefresh, Modifier.padding(innerPadding)) { loaded ->
+            val shown = if (onlyArchived) {
+                loaded.entries.filter { briefingFileName(it.url) in archived }
+            } else {
+                loaded.entries
+            }
             PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
                 ) {
+                    if (onlyArchived && shown.isEmpty()) {
+                        item {
+                            Text(
+                                "No archived briefings yet.\nOpen a briefing and tap ★ to keep it on the phone for good. " +
+                                    "Others are deleted from the phone after $KEEP_DAYS days.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, top = 24.dp)
+                            )
+                        }
+                    }
                     item {
                         Text(
-                            "${countText(loaded.entries.size)} · updated ${loaded.updatedAt.format(UPDATED_FORMAT)}",
+                            "${countText(shown.size)} · updated ${loaded.updatedAt.format(UPDATED_FORMAT)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 4.dp, top = 16.dp)
                         )
                     }
                     // One group per month; the month name stays on top while you scroll through it.
-                    loaded.entries
+                    shown
                         .groupBy { parseDate(it.date)?.format(MONTH_YEAR) ?: "Other" }
                         .forEach { (month, entries) ->
                             stickyHeader { MonthHeader(month) }
                             items(entries) { entry ->
-                                BriefingCard(entry, onClick = { onOpen(entry) })
+                                BriefingCard(
+                                    entry,
+                                    archived = briefingFileName(entry.url) in archived,
+                                    onClick = { onOpen(entry) }
+                                )
                                 Spacer(Modifier.height(12.dp))
                             }
                         }
@@ -382,9 +446,9 @@ private fun MonthHeader(month: String) {
 }
 
 // A briefing in the list: calendar-style date, title, "Today"/"Yesterday"/weekday.
-// Today's briefing gets a sun-coloured border and a NEW tag.
+// Today's briefing gets a sun-coloured border and a NEW tag; archived ones get a ★.
 @Composable
-private fun BriefingCard(entry: BriefingEntry, onClick: () -> Unit) {
+private fun BriefingCard(entry: BriefingEntry, archived: Boolean, onClick: () -> Unit) {
     val date = parseDate(entry.date)
     val isToday = date == LocalDate.now()
     Card(
@@ -411,6 +475,10 @@ private fun BriefingCard(entry: BriefingEntry, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            if (archived) {
+                Icon(Icons.Default.Star, contentDescription = "Archived", tint = Sun, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(4.dp))
             }
             if (isToday) Pill("NEW", highlighted = true)
             Icon(
@@ -450,9 +518,10 @@ private fun DateBadge(date: LocalDate?) {
 
 // ===================== Screen 3: one briefing =====================
 
+// ★ archives the briefing: it then stays on the phone for good instead of KEEP_DAYS days.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReaderScreen(title: String, url: String, onBack: () -> Unit) {
+fun ReaderScreen(title: String, url: String, archived: Boolean, onToggleArchive: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     Scaffold(
         topBar = {
@@ -460,6 +529,21 @@ fun ReaderScreen(title: String, url: String, onBack: () -> Unit) {
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { BackButton(onBack) },
                 actions = {
+                    IconButton(onClick = {
+                        onToggleArchive()
+                        val message = if (archived) {
+                            "Removed from the archive"
+                        } else {
+                            "Archived: kept on the phone for good"
+                        }
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = if (archived) "Remove from archive" else "Archive",
+                            tint = if (archived) Sun else Color.White.copy(alpha = 0.6f)
+                        )
+                    }
                     IconButton(onClick = { shareBriefing(context, title, url) }) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
                     }

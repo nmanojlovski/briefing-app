@@ -40,6 +40,7 @@ class BriefingCheckWorker(context: Context, params: WorkerParameters) : Coroutin
             showBriefingNotification(applicationContext, todays)
         }
         updateWidgets(applicationContext) // the home screen widget shows the newest headlines
+        cleanUpOldBriefings(applicationContext) // delete old saved briefings that aren't archived
 
         // APPEND_OR_REPLACE: queue the next check to start after this one finishes.
         scheduleCheck(applicationContext, foundToday = todays != null, ExistingWorkPolicy.APPEND_OR_REPLACE)

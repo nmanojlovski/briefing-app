@@ -83,6 +83,35 @@ class BriefingViewModel(private val app: Application) : AndroidViewModel(app) {
     var isRefreshing by mutableStateOf(false)
         private set
 
+    // File names of the archived briefings, e.g. "2026-11-26.html" (see Archive.kt).
+    var archived by mutableStateOf(loadArchived(app))
+        private set
+
+    // Light, dark or the same as the phone (see ThemeSetting.kt).
+    var themeMode by mutableStateOf(loadThemeMode(app))
+        private set
+
+    init {
+        // Once per app start: delete saved briefings older than KEEP_DAYS days, unless archived.
+        viewModelScope.launch { cleanUpOldBriefings(app) }
+    }
+
+    // The ★ button: archive a briefing (keep it on the phone for good), or take it out again.
+    fun toggleArchive(url: String) {
+        val file = briefingFileName(url)
+        archived = if (file in archived) archived - file else archived + file
+        saveArchived(app, archived)
+        // Make sure an archived briefing really is saved on the phone.
+        if (file in archived) viewModelScope.launch { loadPage(app, url) }
+    }
+
+    // The "Appearance" button: Same as phone -> Light -> Dark -> Same as phone.
+    fun nextThemeMode() {
+        themeMode = themeMode.next()
+        saveThemeMode(app, themeMode)
+        applyThemeMode(app, themeMode)
+    }
+
     fun refresh() {
         // launch starts a coroutine: getIndex() waits for the network without freezing the screen.
         viewModelScope.launch {
@@ -135,7 +164,7 @@ private data class SavedIndex(val updatedAt: String, val entries: List<BriefingE
 // Downloads one briefing page and keeps a copy. Without internet it returns the saved copy,
 // or null if this briefing was never opened before.
 suspend fun loadPage(context: Context, url: String): String? {
-    val fileName = url.substringAfterLast('/') // e.g. "2026-11-25.html"
+    val fileName = briefingFileName(url) // e.g. "2026-11-25.html"
     return try {
         val html = briefingApi.getPage(url).string()
         saveFile(context, fileName, html)
