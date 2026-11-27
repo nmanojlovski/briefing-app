@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -91,8 +92,10 @@ import java.util.Locale
 fun HomeScreen(
     state: IndexState,
     isDark: Boolean,
+    budgetSpent: Long,
     onShowAll: () -> Unit,
     onOpenWheel: () -> Unit,
+    onOpenBudget: () -> Unit,
     onToggleTheme: () -> Unit
 ) {
     // Surface paints the background and sets the matching text colour (light text in dark mode).
@@ -130,6 +133,17 @@ fun HomeScreen(
                     title = "Spin the wheel",
                     subtitle = "Let the wheel pick a name",
                     onClick = onOpenWheel
+                )
+                Spacer(Modifier.height(12.dp))
+                MenuTile(
+                    icon = Icons.Default.ShoppingCart,
+                    title = "Budget",
+                    subtitle = if (budgetSpent > 0) {
+                        "Spent this month: ${formatMkd(budgetSpent)}"
+                    } else {
+                        "Track deposits and spending"
+                    },
+                    onClick = onOpenBudget
                 )
                 Spacer(Modifier.height(24.dp))
             }

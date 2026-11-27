@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,12 +34,15 @@ import androidx.navigation.toRoute
 import com.nmanojlovski.briefing.ui.theme.BriefingTheme
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
+import java.time.YearMonth
 
 // The app's screens ("routes"). A route is like an address that Navigation can go to and come back from.
 @Serializable data object HomeRoute
 @Serializable data object HistoryRoute
 @Serializable data class ReaderRoute(val title: String, val url: String)
 @Serializable data object WheelRoute
+@Serializable data object BudgetRoute
+@Serializable data class BudgetEntryRoute(val id: Long = 0) // 0 = a new entry
 
 // Put on the notification's tap action, so the app can open that briefing straight away.
 const val EXTRA_TITLE = "briefing_title"
@@ -51,6 +55,7 @@ private val DARK_SCRIM = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
 class MainActivity : ComponentActivity() {
     // `by viewModels()` creates the ViewModel once and gives back the same one after a rotation.
     private val viewModel: BriefingViewModel by viewModels()
+    private val budgetViewModel: BudgetViewModel by viewModels()
 
     // Shows Android's "Allow notifications?" dialog. We don't need to react to the answer.
     private val askNotificationPermission =
@@ -115,6 +120,7 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize()) {
                     BriefingApp(
                         viewModel,
+                        budgetViewModel,
                         openFirst,
                         isDark = dark,
                         onToggleTheme = { if (switchingToDark == null) switchingToDark = !dark }
@@ -137,6 +143,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BriefingApp(
     viewModel: BriefingViewModel,
+    budgetViewModel: BudgetViewModel,
     openFirst: ReaderRoute?,
     isDark: Boolean,
     onToggleTheme: () -> Unit
@@ -155,11 +162,14 @@ fun BriefingApp(
         popExitTransition = { slideOutOfContainer(SlideDirection.End) + fadeOut() }
     ) {
         composable<HomeRoute> {
+            val budgetEntries by budgetViewModel.entries.collectAsState()
             HomeScreen(
                 state = viewModel.state,
                 isDark = isDark,
+                budgetSpent = summarize(budgetEntries, YearMonth.now()).spent,
                 onShowAll = { navController.navigate(HistoryRoute) },
                 onOpenWheel = { navController.navigate(WheelRoute) },
+                onOpenBudget = { navController.navigate(BudgetRoute) },
                 onToggleTheme = onToggleTheme
             )
         }
@@ -185,6 +195,22 @@ fun BriefingApp(
         }
         composable<WheelRoute> {
             WheelScreen(onBack = { navController.navigateUp() })
+        }
+        composable<BudgetRoute> {
+            BudgetScreen(
+                viewModel = budgetViewModel,
+                onAdd = { navController.navigate(BudgetEntryRoute()) },
+                onEdit = { entry -> navController.navigate(BudgetEntryRoute(entry.id)) },
+                onBack = { navController.navigateUp() }
+            )
+        }
+        composable<BudgetEntryRoute> { backStackEntry ->
+            val route: BudgetEntryRoute = backStackEntry.toRoute()
+            BudgetEntryScreen(
+                viewModel = budgetViewModel,
+                entryId = route.id,
+                onDone = { navController.navigateUp() }
+            )
         }
     }
 }
