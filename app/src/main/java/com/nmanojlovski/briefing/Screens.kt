@@ -168,7 +168,7 @@ private fun HomeHeader(offline: Boolean, isDark: Boolean, onToggleTheme: () -> U
         // (the button's touch area is a bit bigger than the circle you see).
         ThemeToggle(isDark, onToggleTheme, Modifier.offset(x = (-8).dp))
         Text(
-            "DAILY BRIEFING",
+            "PERSONAL APP",
             style = MaterialTheme.typography.labelLarge,
             color = Sun,
             letterSpacing = 2.sp
