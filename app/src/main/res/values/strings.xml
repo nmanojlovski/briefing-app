@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Briefing</string>
+    <string name="app_name">Personal app</string>
     <string name="widget_name">Daily briefing</string>
     <string name="widget_description">Today\'s top headlines</string>
 </resources>

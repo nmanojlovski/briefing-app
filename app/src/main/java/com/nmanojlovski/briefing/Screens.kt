@@ -111,11 +111,7 @@ fun HomeScreen(
                 onToggleTheme = onToggleTheme
             )
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Text(
-                    "Menu",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)
-                )
+                Spacer(Modifier.height(20.dp)) // a little room between the blue band and the tiles
                 MenuTile(
                     icon = Icons.AutoMirrored.Filled.List,
                     title = "Briefings",
